@@ -3,7 +3,10 @@
     "allow": [
       "Bash(tasklist /FI \"IMAGENAME eq Unity.exe\" /V /FO CSV)",
       "Bash(tasklist)",
-      "Bash(wmic process where \"name=''Unity.exe''\" get ProcessId,CommandLine /FORMAT:LIST)"
+      "Bash(wmic process where \"name=''Unity.exe''\" get ProcessId,CommandLine /FORMAT:LIST)",
+      "Bash(ls -lh \"Assets/Art/AssetPacks/NinjaAdventure/Ninja Adventure - Asset Pack/Backgrounds/Tilesets/\"*.png)",
+      "Bash(ls -lh Assets/Art/AssetPacks/NinjaAdventure/*/Backgrounds/Tilesets/*.png)",
+      "Bash(wc -c *.png)"
     ]
   }
 }

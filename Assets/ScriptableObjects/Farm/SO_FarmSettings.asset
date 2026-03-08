@@ -1,0 +1,18 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a75ff96251d45544a982b1993dcbd523, type: 3}
+  m_Name: SO_FarmSettings
+  m_EditorClassIdentifier: Assembly-CSharp::SO_FarmSettings
+  tilledTile: {fileID: 11400000, guid: 30c13a96d23228d45b5b18631238a0dd, type: 2}
+  wateredTile: {fileID: 11400000, guid: 927ba6589835802478178c367c38de25, type: 2}
+  plantedTile: {fileID: 0}
+  grassTile: {fileID: 11400000, guid: 6fa97d7df1ed7be4b9621c8aba219261, type: 2}

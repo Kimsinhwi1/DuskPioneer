@@ -10,6 +10,12 @@ public class PlayerController : MonoBehaviour
     public float moveSpeed = 5f;
     public float frameRate = 8f;
 
+    /// <summary>true이면 이동/애니메이션 입력을 무시한다 (도구 사용 중 등).</summary>
+    [HideInInspector] public bool isActionLocked;
+
+    /// <summary>현재 바라보는 방향 (0=Down, 1=Up, 2=Left, 3=Right). 읽기 전용.</summary>
+    public int Direction => _direction;
+
     // 방향별 스프라이트 (Phase0Setup에서 할당)
     [HideInInspector] public Sprite[] walkDownSprites;
     [HideInInspector] public Sprite[] walkUpSprites;
@@ -75,6 +81,13 @@ public class PlayerController : MonoBehaviour
 
     private void Update()
     {
+        // 도구 사용 등 액션 잠금 중에는 이동/애니메이션 처리 안 함
+        if (isActionLocked)
+        {
+            _moveInput = Vector2.zero;
+            return;
+        }
+
         _moveInput = _moveAction.ReadValue<Vector2>();
         bool isMoving = _moveInput.sqrMagnitude > 0.01f;
 
