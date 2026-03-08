@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(tasklist /FI \"IMAGENAME eq Unity.exe\" /V /FO CSV)",
+      "Bash(tasklist)",
+      "Bash(wmic process where \"name=''Unity.exe''\" get ProcessId,CommandLine /FORMAT:LIST)"
+    ]
+  }
+}
