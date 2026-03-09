@@ -1230,6 +1230,374 @@ public static class Phase1Setup
         Debug.Log($"[Phase1 Step4] FarmManager에 작물 {crops.Length}종 할당 완료.");
     }
 
+    // ═══════════════════════════════════════════
+    //  Phase 1 Step 5: 인벤토리 시스템
+    // ═══════════════════════════════════════════
+
+    private const string SO_ITEM_DIR = "Assets/ScriptableObjects/Items";
+    private const string TOOL_SPRITE_PATH = NINJA_BASE + "/Items/Tool";
+
+    [MenuItem("DuskPioneer/Phase 1 Step 5 - Inventory System Setup")]
+    static void RunPhase1Step5()
+    {
+        EditorUtility.DisplayProgressBar("Phase 1 Step 5", "1/5: 도구 스프라이트 Import 설정...", 0.10f);
+        FixToolSpriteImports();
+
+        EditorUtility.DisplayProgressBar("Phase 1 Step 5", "2/5: SO_ItemData 에셋 생성...", 0.25f);
+        var itemAssets = CreateItemDataAssets();
+
+        EditorUtility.DisplayProgressBar("Phase 1 Step 5", "3/5: Player에 Inventory 컴포넌트 추가...", 0.45f);
+        SetupInventoryComponent(itemAssets);
+
+        EditorUtility.DisplayProgressBar("Phase 1 Step 5", "4/5: 인벤토리 UI 생성...", 0.65f);
+        CreateInventoryUI();
+
+        EditorUtility.DisplayProgressBar("Phase 1 Step 5", "5/5: 씬 저장...", 0.90f);
+
+        EditorUtility.ClearProgressBar();
+
+        UnityEditor.SceneManagement.EditorSceneManager.SaveOpenScenes();
+        Debug.Log("[Phase1 Step5] 인벤토리 시스템 셋업 완료!");
+        Debug.Log("[Phase1 Step5] Tab/I키: 인벤토리 열기/닫기. 방향키: 슬롯 이동. X키: 아이템 버리기.");
+    }
+
+    // ─────────────────────────────────────────
+    //  도구 스프라이트 Import 설정
+    // ─────────────────────────────────────────
+
+    static void FixToolSpriteImports()
+    {
+        string[] toolFiles = { "Hoe.png", "WateringCan.png", "Shovel.png", "Axe.png" };
+        foreach (var file in toolFiles)
+        {
+            string path = TOOL_SPRITE_PATH + "/" + file;
+            var ti = AssetImporter.GetAtPath(path) as TextureImporter;
+            if (ti == null) continue;
+
+            ti.textureType = TextureImporterType.Sprite;
+            ti.spriteImportMode = SpriteImportMode.Single;
+            ti.spritePixelsPerUnit = 16;
+            ti.filterMode = FilterMode.Point;
+            ti.textureCompression = TextureImporterCompression.Uncompressed;
+            ti.mipmapEnabled = false;
+            ti.SaveAndReimport();
+        }
+        Debug.Log("[Phase1 Step5] 도구 스프라이트 Import 설정 완료.");
+    }
+
+    // ─────────────────────────────────────────
+    //  SO_ItemData 에셋 생성 (씨앗 3, 작물 3, 도구 4)
+    // ─────────────────────────────────────────
+
+    /// <summary>
+    /// 씨앗, 작물, 도구 아이템 데이터를 생성한다.
+    /// 반환: [0-2]=씨앗, [3-5]=작물, [6-9]=도구
+    /// </summary>
+    static SO_ItemData[] CreateItemDataAssets()
+    {
+        EnsureDirectory(SO_ITEM_DIR);
+
+        // 작물 SO_CropData 로드
+        var cropTurnip = AssetDatabase.LoadAssetAtPath<SO_CropData>(SO_CROP_DIR + "/SO_Crop_무.asset");
+        var cropCarrot = AssetDatabase.LoadAssetAtPath<SO_CropData>(SO_CROP_DIR + "/SO_Crop_당근.asset");
+        var cropPotato = AssetDatabase.LoadAssetAtPath<SO_CropData>(SO_CROP_DIR + "/SO_Crop_감자.asset");
+
+        // 스프라이트 로드
+        var seed1 = AssetDatabase.LoadAssetAtPath<Sprite>(FOOD_PATH + "/Seed1.png");
+        var seed2 = AssetDatabase.LoadAssetAtPath<Sprite>(FOOD_PATH + "/Seed2.png");
+        var seed3 = AssetDatabase.LoadAssetAtPath<Sprite>(FOOD_PATH + "/Seed3.png");
+        var harvest1 = AssetDatabase.LoadAssetAtPath<Sprite>(FOOD_PATH + "/SeedBig1.png");
+        var harvest2 = AssetDatabase.LoadAssetAtPath<Sprite>(FOOD_PATH + "/SeedBig2.png");
+        var harvest3 = AssetDatabase.LoadAssetAtPath<Sprite>(FOOD_PATH + "/SeedBig3.png");
+
+        var hoeSprite = AssetDatabase.LoadAssetAtPath<Sprite>(TOOL_SPRITE_PATH + "/Hoe.png");
+        var waterCanSprite = AssetDatabase.LoadAssetAtPath<Sprite>(TOOL_SPRITE_PATH + "/WateringCan.png");
+        var shovelSprite = AssetDatabase.LoadAssetAtPath<Sprite>(TOOL_SPRITE_PATH + "/Shovel.png");
+        var axeSprite = AssetDatabase.LoadAssetAtPath<Sprite>(TOOL_SPRITE_PATH + "/Axe.png");
+
+        // 아이템 정의 목록
+        var defs = new (string name, string desc, ItemType type, Sprite icon, int maxStack, int sellPrice, SO_CropData cropData)[]
+        {
+            // 씨앗 [0-2]
+            ("무 씨앗", "무를 심을 수 있는 씨앗.", ItemType.Seed, seed1, 99, 5, cropTurnip),
+            ("당근 씨앗", "당근을 심을 수 있는 씨앗.", ItemType.Seed, seed2, 99, 8, cropCarrot),
+            ("감자 씨앗", "감자를 심을 수 있는 씨앗.", ItemType.Seed, seed3, 99, 10, cropPotato),
+            // 작물 [3-5]
+            ("무", "수확한 무. 팔거나 요리 재료로 사용.", ItemType.Crop, harvest1, 99, 15, null),
+            ("당근", "수확한 당근. 팔거나 요리 재료로 사용.", ItemType.Crop, harvest2, 99, 25, null),
+            ("감자", "수확한 감자. 팔거나 요리 재료로 사용.", ItemType.Crop, harvest3, 99, 35, null),
+            // 도구 [6-9]
+            ("괭이", "땅을 경작하는 도구.", ItemType.Tool, hoeSprite, 1, 0, null),
+            ("물뿌리개", "작물에 물을 주는 도구.", ItemType.Tool, waterCanSprite, 1, 0, null),
+            ("삽", "경작지를 되돌리는 도구.", ItemType.Tool, shovelSprite, 1, 0, null),
+            ("도끼", "나무를 벨 수 있는 도구.", ItemType.Tool, axeSprite, 1, 0, null),
+        };
+
+        var result = new SO_ItemData[defs.Length];
+
+        for (int i = 0; i < defs.Length; i++)
+        {
+            var def = defs[i];
+            string safeName = def.name.Replace(" ", "_");
+            string assetPath = $"{SO_ITEM_DIR}/SO_Item_{safeName}.asset";
+
+            var existing = AssetDatabase.LoadAssetAtPath<SO_ItemData>(assetPath);
+            if (existing != null)
+            {
+                // 기존 에셋 갱신
+                existing.itemName = def.name;
+                existing.description = def.desc;
+                existing.itemType = def.type;
+                existing.icon = def.icon;
+                existing.maxStack = def.maxStack;
+                existing.sellPrice = def.sellPrice;
+                existing.cropData = def.cropData;
+                EditorUtility.SetDirty(existing);
+                result[i] = existing;
+                Debug.Log($"[Phase1 Step5] SO_ItemData 갱신: {def.name}");
+                continue;
+            }
+
+            var so = ScriptableObject.CreateInstance<SO_ItemData>();
+            so.itemName = def.name;
+            so.description = def.desc;
+            so.itemType = def.type;
+            so.icon = def.icon;
+            so.maxStack = def.maxStack;
+            so.sellPrice = def.sellPrice;
+            so.cropData = def.cropData;
+
+            AssetDatabase.CreateAsset(so, assetPath);
+            result[i] = so;
+            Debug.Log($"[Phase1 Step5] SO_ItemData 생성: {def.name}");
+        }
+
+        AssetDatabase.SaveAssets();
+        return result;
+    }
+
+    // ─────────────────────────────────────────
+    //  Player에 Inventory 컴포넌트 추가
+    // ─────────────────────────────────────────
+
+    /// <summary>
+    /// Player에 Inventory 컴포넌트를 추가하고, 시작 아이템과 수확물 매핑을 설정한다.
+    /// itemAssets: [0-2]=씨앗, [3-5]=작물, [6-9]=도구
+    /// </summary>
+    static void SetupInventoryComponent(SO_ItemData[] itemAssets)
+    {
+        var player = GameObject.FindGameObjectWithTag("Player");
+        if (player == null)
+        {
+            Debug.LogError("[Phase1 Step5] Player를 찾을 수 없습니다!");
+            return;
+        }
+
+        var inv = player.GetComponent<Inventory>();
+        if (inv == null)
+            inv = player.AddComponent<Inventory>();
+
+        var so = new SerializedObject(inv);
+
+        // 시작 아이템: 씨앗 3종 × 5개씩
+        var startItemsProp = so.FindProperty("_startItems");
+        startItemsProp.arraySize = 3;
+        startItemsProp.GetArrayElementAtIndex(0).objectReferenceValue = itemAssets[0]; // 무 씨앗
+        startItemsProp.GetArrayElementAtIndex(1).objectReferenceValue = itemAssets[1]; // 당근 씨앗
+        startItemsProp.GetArrayElementAtIndex(2).objectReferenceValue = itemAssets[2]; // 감자 씨앗
+
+        var startQtyProp = so.FindProperty("_startQuantities");
+        startQtyProp.arraySize = 3;
+        startQtyProp.GetArrayElementAtIndex(0).intValue = 5;
+        startQtyProp.GetArrayElementAtIndex(1).intValue = 5;
+        startQtyProp.GetArrayElementAtIndex(2).intValue = 5;
+
+        // 수확물 매핑: FarmManager._crops 인덱스와 동일 순서
+        var harvestProp = so.FindProperty("_harvestItems");
+        harvestProp.arraySize = 3;
+        harvestProp.GetArrayElementAtIndex(0).objectReferenceValue = itemAssets[3]; // 무
+        harvestProp.GetArrayElementAtIndex(1).objectReferenceValue = itemAssets[4]; // 당근
+        harvestProp.GetArrayElementAtIndex(2).objectReferenceValue = itemAssets[5]; // 감자
+
+        so.ApplyModifiedPropertiesWithoutUndo();
+        Debug.Log("[Phase1 Step5] Player에 Inventory 컴포넌트 설정 완료 (씨앗 3종 × 5개).");
+    }
+
+    // ─────────────────────────────────────────
+    //  인벤토리 UI 생성
+    // ─────────────────────────────────────────
+
+    /// <summary>
+    /// HUD Canvas에 인벤토리 UI 패널과 30개 슬롯을 생성한다.
+    /// </summary>
+    static void CreateInventoryUI()
+    {
+        // 기존 InventoryUI가 있으면 스킵
+        if (Object.FindFirstObjectByType<InventoryUI>() != null)
+        {
+            Debug.Log("[Phase1 Step5] InventoryUI 이미 존재. 스킵.");
+            return;
+        }
+
+        var hudCanvas = FindHUDCanvas();
+        if (hudCanvas == null) return;
+
+        int slotCount = 30;
+        int cols = 6;
+        float cellSize = 48f;
+        float spacing = 4f;
+        float padding = 10f;
+        float titleHeight = 30f;
+
+        float gridWidth = cols * cellSize + (cols - 1) * spacing + padding * 2;
+        int rows = Mathf.CeilToInt((float)slotCount / cols);
+        float gridHeight = rows * cellSize + (rows - 1) * spacing + padding * 2 + titleHeight;
+
+        // ─── InventoryPanel (루트, 비활성) ───
+        var panelObj = new GameObject("InventoryPanel");
+        panelObj.transform.SetParent(hudCanvas.transform, false);
+
+        var panelRect = panelObj.AddComponent<RectTransform>();
+        panelRect.anchorMin = new Vector2(0.5f, 0.5f);
+        panelRect.anchorMax = new Vector2(0.5f, 0.5f);
+        panelRect.pivot = new Vector2(0.5f, 0.5f);
+        panelRect.anchoredPosition = Vector2.zero;
+        panelRect.sizeDelta = new Vector2(gridWidth, gridHeight);
+
+        var panelBg = panelObj.AddComponent<Image>();
+        panelBg.color = new Color(0.1f, 0.1f, 0.15f, 0.92f);
+        panelBg.raycastTarget = true;
+
+        // ─── 타이틀 "가방" ───
+        var titleObj = new GameObject("Title");
+        titleObj.transform.SetParent(panelObj.transform, false);
+
+        var titleRect = titleObj.AddComponent<RectTransform>();
+        titleRect.anchorMin = new Vector2(0f, 1f);
+        titleRect.anchorMax = new Vector2(1f, 1f);
+        titleRect.pivot = new Vector2(0.5f, 1f);
+        titleRect.anchoredPosition = new Vector2(0, -4);
+        titleRect.sizeDelta = new Vector2(0, titleHeight);
+
+        var titleTmp = titleObj.AddComponent<TextMeshProUGUI>();
+        titleTmp.text = "가방";
+        titleTmp.fontSize = 20;
+        titleTmp.color = Color.white;
+        titleTmp.alignment = TextAlignmentOptions.Center;
+        titleTmp.raycastTarget = false;
+
+        // TMP 폰트 할당
+        var tmpFont = AssetDatabase.LoadAssetAtPath<TMP_FontAsset>(KOREAN_TMP_FONT_PATH);
+        if (tmpFont != null) titleTmp.font = tmpFont;
+
+        // ─── SlotContainer (GridLayout) ───
+        var containerObj = new GameObject("SlotContainer");
+        containerObj.transform.SetParent(panelObj.transform, false);
+
+        var containerRect = containerObj.AddComponent<RectTransform>();
+        containerRect.anchorMin = new Vector2(0f, 0f);
+        containerRect.anchorMax = new Vector2(1f, 1f);
+        containerRect.offsetMin = new Vector2(padding, padding);
+        containerRect.offsetMax = new Vector2(-padding, -(titleHeight + padding));
+
+        var grid = containerObj.AddComponent<GridLayoutGroup>();
+        grid.cellSize = new Vector2(cellSize, cellSize);
+        grid.spacing = new Vector2(spacing, spacing);
+        grid.constraint = GridLayoutGroup.Constraint.FixedColumnCount;
+        grid.constraintCount = cols;
+        grid.childAlignment = TextAnchor.UpperLeft;
+
+        // ─── 30개 슬롯 생성 ───
+        var slotBgs = new Image[slotCount];
+        var slotIcons = new Image[slotCount];
+        var slotTexts = new TextMeshProUGUI[slotCount];
+
+        for (int i = 0; i < slotCount; i++)
+        {
+            // 슬롯 배경
+            var slotObj = new GameObject($"Slot_{i:D2}");
+            slotObj.transform.SetParent(containerObj.transform, false);
+
+            var slotRect = slotObj.AddComponent<RectTransform>();
+            slotRect.sizeDelta = new Vector2(cellSize, cellSize);
+
+            var slotBg = slotObj.AddComponent<Image>();
+            slotBg.color = new Color(0.2f, 0.2f, 0.2f, 0.8f);
+            slotBg.raycastTarget = false;
+
+            slotBgs[i] = slotBg;
+
+            // 아이콘 이미지
+            var iconObj = new GameObject("Icon");
+            iconObj.transform.SetParent(slotObj.transform, false);
+
+            var iconRect = iconObj.AddComponent<RectTransform>();
+            iconRect.anchorMin = new Vector2(0.1f, 0.15f);
+            iconRect.anchorMax = new Vector2(0.9f, 0.95f);
+            iconRect.offsetMin = Vector2.zero;
+            iconRect.offsetMax = Vector2.zero;
+
+            var iconImg = iconObj.AddComponent<Image>();
+            iconImg.color = Color.clear; // 초기: 투명
+            iconImg.raycastTarget = false;
+            iconImg.preserveAspect = true;
+
+            slotIcons[i] = iconImg;
+
+            // 수량 텍스트
+            var qtyObj = new GameObject("Quantity");
+            qtyObj.transform.SetParent(slotObj.transform, false);
+
+            var qtyRect = qtyObj.AddComponent<RectTransform>();
+            qtyRect.anchorMin = new Vector2(1f, 0f);
+            qtyRect.anchorMax = new Vector2(1f, 0f);
+            qtyRect.pivot = new Vector2(1f, 0f);
+            qtyRect.anchoredPosition = new Vector2(-2, 2);
+            qtyRect.sizeDelta = new Vector2(30, 16);
+
+            var qtyTmp = qtyObj.AddComponent<TextMeshProUGUI>();
+            qtyTmp.text = "";
+            qtyTmp.fontSize = 12;
+            qtyTmp.color = Color.white;
+            qtyTmp.alignment = TextAlignmentOptions.BottomRight;
+            qtyTmp.raycastTarget = false;
+            if (tmpFont != null) qtyTmp.font = tmpFont;
+
+            slotTexts[i] = qtyTmp;
+        }
+
+        // ─── InventoryUI 컴포넌트를 Canvas에 부착 (항상 활성) ───
+        // panelObj는 비활성이므로, 컴포넌트는 Canvas에 붙여야 OnEnable/InputAction이 동작
+        var uiComp = hudCanvas.gameObject.AddComponent<InventoryUI>();
+        var uiSO = new SerializedObject(uiComp);
+
+        uiSO.FindProperty("_panel").objectReferenceValue = panelObj;
+        uiSO.FindProperty("_slotContainer").objectReferenceValue = containerObj.transform;
+
+        // 배열 할당
+        var bgsProp = uiSO.FindProperty("_slotBackgrounds");
+        bgsProp.arraySize = slotCount;
+        for (int i = 0; i < slotCount; i++)
+            bgsProp.GetArrayElementAtIndex(i).objectReferenceValue = slotBgs[i];
+
+        var iconsProp = uiSO.FindProperty("_slotIcons");
+        iconsProp.arraySize = slotCount;
+        for (int i = 0; i < slotCount; i++)
+            iconsProp.GetArrayElementAtIndex(i).objectReferenceValue = slotIcons[i];
+
+        var textsProp = uiSO.FindProperty("_slotQuantityTexts");
+        textsProp.arraySize = slotCount;
+        for (int i = 0; i < slotCount; i++)
+            textsProp.GetArrayElementAtIndex(i).objectReferenceValue = slotTexts[i];
+
+        uiSO.ApplyModifiedPropertiesWithoutUndo();
+
+        // 패널 비활성 (InventoryUI.OnEnable은 Canvas에서 동작, 패널만 토글)
+        panelObj.SetActive(false);
+
+        Debug.Log($"[Phase1 Step5] InventoryUI 생성 완료 ({slotCount}슬롯, {cols}열 × {rows}행).");
+    }
+
     // ─────────────────────────────────────────
     //  유틸리티
     // ─────────────────────────────────────────

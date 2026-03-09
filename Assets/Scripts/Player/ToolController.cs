@@ -27,6 +27,7 @@ public class ToolController : MonoBehaviour
     private StaminaManager _stamina;
     private SpriteRenderer _sr;
     private FarmManager _farmManager;
+    private Inventory _inventory;
 
     // ── 입력 ──
     private InputAction _toolSelectAction;
@@ -116,8 +117,9 @@ public class ToolController : MonoBehaviour
         if (tools.Length > 0 && tools[0] != null)
             OnToolChanged?.Invoke(tools[0]);
 
-        // FarmManager 참조 캐싱
+        // 참조 캐싱
         _farmManager = FindFirstObjectByType<FarmManager>();
+        _inventory = GetComponent<Inventory>();
     }
 
     private void Update()
@@ -173,7 +175,7 @@ public class ToolController : MonoBehaviour
 
     /// <summary>
     /// E키: 심기 또는 수확.
-    /// Tilled 타일 → 현재 선택된 씨앗 심기.
+    /// Tilled 타일 → 인벤토리에서 씨앗 소모 후 심기.
     /// 성장 완료 타일 → 수확.
     /// </summary>
     private void OnInteractPerformed(InputAction.CallbackContext ctx)
@@ -191,10 +193,25 @@ public class ToolController : MonoBehaviour
             return;
         }
 
-        // 심기 시도
+        // 심기 시도 — 인벤토리에서 씨앗 소모
         if (_farmManager.CanPlant(cellPos))
         {
-            _farmManager.PlantSeed(cellPos, _selectedCropIndex);
+            if (_inventory != null)
+            {
+                var seedItem = _inventory.FindSeedForCrop(_selectedCropIndex);
+                if (seedItem == null)
+                {
+                    Debug.Log("[Tool] 씨앗이 없습니다!");
+                    return;
+                }
+                _farmManager.PlantSeed(cellPos, _selectedCropIndex);
+                _inventory.RemoveItemByData(seedItem, 1);
+            }
+            else
+            {
+                // 인벤토리 없으면 기존 방식 (폴백)
+                _farmManager.PlantSeed(cellPos, _selectedCropIndex);
+            }
             return;
         }
 
