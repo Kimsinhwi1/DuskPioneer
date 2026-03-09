@@ -5,7 +5,7 @@ using UnityEngine.InputSystem;
 /// <summary>
 /// 도구 선택 및 사용을 담당하는 컨트롤러.
 /// Player 오브젝트에 PlayerController와 함께 부착.
-/// 8방향 지원.
+/// 8방향 지원. E키로 심기/수확, Q키로 씨앗 전환.
 /// </summary>
 public class ToolController : MonoBehaviour
 {
@@ -20,19 +20,25 @@ public class ToolController : MonoBehaviour
     private int _selectedIndex;
     private bool _isUsingTool;
     private float _animTimer;
+    private int _selectedCropIndex;
 
     // ── 참조 ──
     private PlayerController _pc;
     private StaminaManager _stamina;
     private SpriteRenderer _sr;
+    private FarmManager _farmManager;
 
     // ── 입력 ──
     private InputAction _toolSelectAction;
     private InputAction _toolUseAction;
+    private InputAction _interactAction;
+    private InputAction _cropCycleAction;
+    private InputAction _sleepAction;
 
     // ── 읽기 전용 프로퍼티 ──
     public SO_ToolData CurrentTool => (tools != null && _selectedIndex < tools.Length) ? tools[_selectedIndex] : null;
     public bool IsUsingTool => _isUsingTool;
+    public int SelectedCropIndex => _selectedCropIndex;
 
     // ── 이벤트 ──
     /// <summary>도구가 전환될 때 발행. param: 새 도구 데이터.</summary>
@@ -40,6 +46,9 @@ public class ToolController : MonoBehaviour
 
     /// <summary>도구 사용 완료 시 발행. param: (도구타입, 사용 위치).</summary>
     public event Action<ToolType, Vector2> OnToolUsed;
+
+    /// <summary>씨앗 전환 시 발행. param: (작물 인덱스, 작물 데이터).</summary>
+    public event Action<int, SO_CropData> OnCropSelectionChanged;
 
     private void Awake()
     {
@@ -62,6 +71,21 @@ public class ToolController : MonoBehaviour
         _toolUseAction.AddBinding("<Keyboard>/space");
         _toolUseAction.performed += OnToolUsePerformed;
         _toolUseAction.Enable();
+
+        _interactAction = new InputAction("Interact", InputActionType.Button);
+        _interactAction.AddBinding("<Keyboard>/e");
+        _interactAction.performed += OnInteractPerformed;
+        _interactAction.Enable();
+
+        _cropCycleAction = new InputAction("CropCycle", InputActionType.Button);
+        _cropCycleAction.AddBinding("<Keyboard>/q");
+        _cropCycleAction.performed += OnCropCyclePerformed;
+        _cropCycleAction.Enable();
+
+        _sleepAction = new InputAction("Sleep", InputActionType.Button);
+        _sleepAction.AddBinding("<Keyboard>/r");
+        _sleepAction.performed += OnSleepPerformed;
+        _sleepAction.Enable();
     }
 
     private void OnDisable()
@@ -73,12 +97,27 @@ public class ToolController : MonoBehaviour
         _toolUseAction.performed -= OnToolUsePerformed;
         _toolUseAction.Disable();
         _toolUseAction.Dispose();
+
+        _interactAction.performed -= OnInteractPerformed;
+        _interactAction.Disable();
+        _interactAction.Dispose();
+
+        _cropCycleAction.performed -= OnCropCyclePerformed;
+        _cropCycleAction.Disable();
+        _cropCycleAction.Dispose();
+
+        _sleepAction.performed -= OnSleepPerformed;
+        _sleepAction.Disable();
+        _sleepAction.Dispose();
     }
 
     private void Start()
     {
         if (tools.Length > 0 && tools[0] != null)
             OnToolChanged?.Invoke(tools[0]);
+
+        // FarmManager 참조 캐싱
+        _farmManager = FindFirstObjectByType<FarmManager>();
     }
 
     private void Update()
@@ -130,6 +169,61 @@ public class ToolController : MonoBehaviour
         }
 
         StartToolUse();
+    }
+
+    /// <summary>
+    /// E키: 심기 또는 수확.
+    /// Tilled 타일 → 현재 선택된 씨앗 심기.
+    /// 성장 완료 타일 → 수확.
+    /// </summary>
+    private void OnInteractPerformed(InputAction.CallbackContext ctx)
+    {
+        if (_isUsingTool) return;
+        if (_farmManager == null) return;
+
+        Vector2 targetPos = GetToolTargetPosition();
+        Vector3Int cellPos = _farmManager.WorldToCell(targetPos);
+
+        // 수확 우선 시도
+        if (_farmManager.CanHarvest(cellPos))
+        {
+            _farmManager.TryHarvest(cellPos);
+            return;
+        }
+
+        // 심기 시도
+        if (_farmManager.CanPlant(cellPos))
+        {
+            _farmManager.PlantSeed(cellPos, _selectedCropIndex);
+            return;
+        }
+
+        Debug.Log("[Tool] 심기/수확 불가: 해당 위치에 경작지가 없거나 이미 작물이 있습니다.");
+    }
+
+    /// <summary>
+    /// R키: 잠자기 — 다음 날로 넘긴다.
+    /// </summary>
+    private void OnSleepPerformed(InputAction.CallbackContext ctx)
+    {
+        if (_isUsingTool) return;
+        if (TimeManager.Instance == null) return;
+
+        TimeManager.Instance.Sleep();
+    }
+
+    /// <summary>
+    /// Q키: 씨앗 종류 전환 (0→1→2→...→0).
+    /// </summary>
+    private void OnCropCyclePerformed(InputAction.CallbackContext ctx)
+    {
+        if (_farmManager == null || _farmManager.Crops == null || _farmManager.Crops.Length == 0) return;
+
+        _selectedCropIndex = (_selectedCropIndex + 1) % _farmManager.Crops.Length;
+        var cropData = _farmManager.Crops[_selectedCropIndex];
+        string name = cropData != null ? cropData.cropName : "없음";
+        Debug.Log($"[Tool] 씨앗 전환: {_selectedCropIndex} → {name}");
+        OnCropSelectionChanged?.Invoke(_selectedCropIndex, cropData);
     }
 
     // ──────────────────────────────────────

@@ -1005,6 +1005,231 @@ public static class Phase1Setup
         Debug.Log("[Phase1 Step3] FarmManager 생성 완료.");
     }
 
+    // ═══════════════════════════════════════════
+    //  Phase 1 Step 4: 작물 시스템
+    // ═══════════════════════════════════════════
+
+    private const string SO_CROP_DIR = "Assets/ScriptableObjects/Crops";
+    private const string FOOD_PATH = NINJA_BASE + "/Items/Food";
+    private const string ANIMATED_PLANT_PATH = NINJA_BASE + "/Backgrounds/Animated/Plant/SpriteSheet16x16.png";
+
+    [MenuItem("DuskPioneer/Phase 1 Step 4 - Crop System Setup")]
+    static void RunPhase1Step4()
+    {
+        EditorUtility.DisplayProgressBar("Phase 1 Step 4", "1/4: 작물 스프라이트 Import 설정...", 0.15f);
+        FixCropSpriteImports();
+
+        EditorUtility.DisplayProgressBar("Phase 1 Step 4", "2/4: 식물 스프라이트 시트 슬라이싱...", 0.35f);
+        SlicePlantSpriteSheet();
+
+        EditorUtility.DisplayProgressBar("Phase 1 Step 4", "3/4: SO_CropData 에셋 생성...", 0.55f);
+        var cropAssets = CreateCropDataAssets();
+
+        EditorUtility.DisplayProgressBar("Phase 1 Step 4", "4/4: FarmManager에 작물 데이터 할당...", 0.80f);
+        AssignCropsToFarmManager(cropAssets);
+
+        EditorUtility.ClearProgressBar();
+
+        UnityEditor.SceneManagement.EditorSceneManager.SaveOpenScenes();
+        Debug.Log("[Phase1 Step4] 작물 시스템 셋업 완료!");
+        Debug.Log("[Phase1 Step4] 괭이→Space 경작 → E키 씨앗심기 → 물주기+Sleep 반복 → E키 수확. Q키로 씨앗 전환.");
+    }
+
+    // ─────────────────────────────────────────
+    //  작물 스프라이트 Import 설정
+    // ─────────────────────────────────────────
+
+    /// <summary>
+    /// 씨앗/수확 아이템 스프라이트의 Import 설정을 픽셀아트에 맞게 수정.
+    /// </summary>
+    static void FixCropSpriteImports()
+    {
+        string[] spriteFiles =
+        {
+            FOOD_PATH + "/Seed1.png",
+            FOOD_PATH + "/Seed2.png",
+            FOOD_PATH + "/Seed3.png",
+            FOOD_PATH + "/SeedBig1.png",
+            FOOD_PATH + "/SeedBig2.png",
+            FOOD_PATH + "/SeedBig3.png",
+            FOOD_PATH + "/Nut.png",
+            FOOD_PATH + "/Nut2.png",
+            FOOD_PATH + "/TeaLeaf.png",
+        };
+
+        foreach (var path in spriteFiles)
+        {
+            var ti = AssetImporter.GetAtPath(path) as TextureImporter;
+            if (ti == null) continue;
+
+            ti.textureType = TextureImporterType.Sprite;
+            ti.spriteImportMode = SpriteImportMode.Single;
+            ti.spritePixelsPerUnit = 16;
+            ti.filterMode = FilterMode.Point;
+            ti.textureCompression = TextureImporterCompression.Uncompressed;
+            ti.mipmapEnabled = false;
+            ti.SaveAndReimport();
+        }
+
+        Debug.Log("[Phase1 Step4] 작물 스프라이트 Import 설정 완료.");
+    }
+
+    // ─────────────────────────────────────────
+    //  식물 스프라이트 시트 슬라이싱
+    // ─────────────────────────────────────────
+
+    /// <summary>
+    /// Animated/Plant/SpriteSheet16x16.png를 4프레임으로 슬라이싱.
+    /// 새싹/성장 단계 스프라이트로 활용.
+    /// </summary>
+    static void SlicePlantSpriteSheet()
+    {
+        var ti = AssetImporter.GetAtPath(ANIMATED_PLANT_PATH) as TextureImporter;
+        if (ti == null)
+        {
+            Debug.LogWarning("[Phase1 Step4] 식물 스프라이트 시트를 찾을 수 없습니다: " + ANIMATED_PLANT_PATH);
+            return;
+        }
+
+        var tex = AssetDatabase.LoadAssetAtPath<Texture2D>(ANIMATED_PLANT_PATH);
+        if (tex == null) return;
+
+        int cols = tex.width / 16; // 64/16 = 4프레임
+        float cellW = 16f;
+        float cellH = 16f;
+
+        ti.textureType = TextureImporterType.Sprite;
+        ti.spriteImportMode = SpriteImportMode.Multiple;
+        ti.spritePixelsPerUnit = 16;
+        ti.filterMode = FilterMode.Point;
+        ti.textureCompression = TextureImporterCompression.Uncompressed;
+        ti.mipmapEnabled = false;
+
+        var rects = new List<SpriteMetaData>();
+        for (int c = 0; c < cols; c++)
+        {
+            rects.Add(new SpriteMetaData
+            {
+                name = $"Plant_{c:D2}",
+                rect = new Rect(c * cellW, 0, cellW, cellH),
+                alignment = (int)SpriteAlignment.Center,
+                pivot = new Vector2(0.5f, 0.5f)
+            });
+        }
+
+        ti.spritesheet = rects.ToArray();
+        ti.SaveAndReimport();
+        Debug.Log($"[Phase1 Step4] 식물 스프라이트 시트 슬라이싱 완료: {cols}프레임");
+    }
+
+    // ─────────────────────────────────────────
+    //  SO_CropData 에셋 3개 생성
+    // ─────────────────────────────────────────
+
+    /// <summary>
+    /// 무(3일), 당근(4일), 감자(5일) 작물 데이터를 생성한다.
+    /// </summary>
+    static SO_CropData[] CreateCropDataAssets()
+    {
+        EnsureDirectory(SO_CROP_DIR);
+
+        // 식물 성장 스프라이트 로드 (슬라이싱된 Plant_00~03)
+        // LoadSpritesOrdered는 파일명 기반 패턴이므로, 직접 이름으로 로드
+        var allPlantSprites = AssetDatabase.LoadAllAssetsAtPath(ANIMATED_PLANT_PATH)
+            .OfType<Sprite>()
+            .OrderBy(s => s.name)
+            .ToArray();
+        Sprite plantSprout = allPlantSprites.Length > 0 ? allPlantSprites[0] : null;
+        Sprite plantGrown = allPlantSprites.Length > 1 ? allPlantSprites[1] : null;
+        Sprite plantMature = allPlantSprites.Length > 2 ? allPlantSprites[2] : null;
+        if (allPlantSprites.Length == 0)
+            Debug.LogWarning("[Phase1 Step4] 식물 스프라이트를 로드할 수 없습니다! SlicePlantSpriteSheet가 먼저 실행되었는지 확인하세요.");
+
+        // 씨앗 스프라이트 로드
+        var seed1 = AssetDatabase.LoadAssetAtPath<Sprite>(FOOD_PATH + "/Seed1.png");
+        var seed2 = AssetDatabase.LoadAssetAtPath<Sprite>(FOOD_PATH + "/Seed2.png");
+        var seed3 = AssetDatabase.LoadAssetAtPath<Sprite>(FOOD_PATH + "/Seed3.png");
+
+        // 수확물 스프라이트 (SeedBig = 수확된 작물 아이콘)
+        var harvest1 = AssetDatabase.LoadAssetAtPath<Sprite>(FOOD_PATH + "/SeedBig1.png");
+        var harvest2 = AssetDatabase.LoadAssetAtPath<Sprite>(FOOD_PATH + "/SeedBig2.png");
+        var harvest3 = AssetDatabase.LoadAssetAtPath<Sprite>(FOOD_PATH + "/SeedBig3.png");
+
+        // 작물 정의: (이름, 성장일, 씨앗스프라이트, 수확스프라이트, 성장단계스프라이트 배열)
+        var cropDefs = new (string name, int days, Sprite seed, Sprite harvested, Sprite[] stages)[]
+        {
+            // 무 (Turnip): 3일, 3단계 (씨앗→새싹→수확가능)
+            ("무", 3, seed1, harvest1, new[] { seed1, plantSprout, plantMature }),
+            // 당근 (Carrot): 4일, 4단계 (씨앗→새싹→성장→수확가능)
+            ("당근", 4, seed2, harvest2, new[] { seed2, plantSprout, plantGrown, plantMature }),
+            // 감자 (Potato): 5일, 4단계 (씨앗→새싹→성장→수확가능)
+            ("감자", 5, seed3, harvest3, new[] { seed3, plantSprout, plantGrown, plantMature }),
+        };
+
+        var result = new SO_CropData[cropDefs.Length];
+
+        for (int i = 0; i < cropDefs.Length; i++)
+        {
+            var def = cropDefs[i];
+            string assetPath = $"{SO_CROP_DIR}/SO_Crop_{def.name}.asset";
+
+            var existing = AssetDatabase.LoadAssetAtPath<SO_CropData>(assetPath);
+            if (existing != null)
+            {
+                // 기존 에셋 갱신 (스프라이트가 null이었을 수 있으므로)
+                existing.cropName = def.name;
+                existing.growthDays = def.days;
+                existing.growthStageSprites = def.stages;
+                existing.harvestedSprite = def.harvested;
+                EditorUtility.SetDirty(existing);
+                result[i] = existing;
+                Debug.Log($"[Phase1 Step4] SO_CropData 갱신: {def.name} (성장 {def.days}일, {def.stages.Length}단계)");
+                continue;
+            }
+
+            var so = ScriptableObject.CreateInstance<SO_CropData>();
+            so.cropName = def.name;
+            so.growthDays = def.days;
+            so.growthStageSprites = def.stages;
+            so.harvestedSprite = def.harvested;
+
+            AssetDatabase.CreateAsset(so, assetPath);
+            result[i] = so;
+            Debug.Log($"[Phase1 Step4] SO_CropData 생성: {def.name} (성장 {def.days}일, {def.stages.Length}단계)");
+        }
+
+        AssetDatabase.SaveAssets();
+        return result;
+    }
+
+    // ─────────────────────────────────────────
+    //  FarmManager에 작물 데이터 할당
+    // ─────────────────────────────────────────
+
+    /// <summary>
+    /// FarmManager의 _crops 배열에 SO_CropData를 할당한다.
+    /// </summary>
+    static void AssignCropsToFarmManager(SO_CropData[] crops)
+    {
+        var fm = Object.FindFirstObjectByType<FarmManager>();
+        if (fm == null)
+        {
+            Debug.LogError("[Phase1 Step4] FarmManager를 찾을 수 없습니다! Step 3을 먼저 실행하세요.");
+            return;
+        }
+
+        var so = new SerializedObject(fm);
+        var cropsProp = so.FindProperty("_crops");
+        cropsProp.arraySize = crops.Length;
+        for (int i = 0; i < crops.Length; i++)
+        {
+            cropsProp.GetArrayElementAtIndex(i).objectReferenceValue = crops[i];
+        }
+        so.ApplyModifiedPropertiesWithoutUndo();
+
+        Debug.Log($"[Phase1 Step4] FarmManager에 작물 {crops.Length}종 할당 완료.");
+    }
+
     // ─────────────────────────────────────────
     //  유틸리티
     // ─────────────────────────────────────────
