@@ -6,7 +6,20 @@
       "Bash(wmic process where \"name=''Unity.exe''\" get ProcessId,CommandLine /FORMAT:LIST)",
       "Bash(ls -lh \"Assets/Art/AssetPacks/NinjaAdventure/Ninja Adventure - Asset Pack/Backgrounds/Tilesets/\"*.png)",
       "Bash(ls -lh Assets/Art/AssetPacks/NinjaAdventure/*/Backgrounds/Tilesets/*.png)",
-      "Bash(wc -c *.png)"
+      "Bash(wc -c *.png)",
+      "mcp__pixellab__create_character",
+      "mcp__pixellab__animate_character",
+      "Bash(curl --fail -o south.png \"https://backblaze.pixellab.ai/file/pixellab-characters/2b77341c-cd5e-41c2-bc19-3ce660a6dc7f/2e363ef5-df17-4572-b171-82f70aff52a0/rotations/south.png?t=1773059207763\")",
+      "Bash(curl --fail -o east.png \"https://backblaze.pixellab.ai/file/pixellab-characters/2b77341c-cd5e-41c2-bc19-3ce660a6dc7f/2e363ef5-df17-4572-b171-82f70aff52a0/rotations/east.png?t=1773059207763\")",
+      "Bash(curl --fail -o north.png \"https://backblaze.pixellab.ai/file/pixellab-characters/2b77341c-cd5e-41c2-bc19-3ce660a6dc7f/2e363ef5-df17-4572-b171-82f70aff52a0/rotations/north.png?t=1773059207763\")",
+      "Bash(curl --fail -o west.png \"https://backblaze.pixellab.ai/file/pixellab-characters/2b77341c-cd5e-41c2-bc19-3ce660a6dc7f/2e363ef5-df17-4572-b171-82f70aff52a0/rotations/west.png?t=1773059207763\")",
+      "Bash(curl --fail -o south-east.png \"https://backblaze.pixellab.ai/file/pixellab-characters/2b77341c-cd5e-41c2-bc19-3ce660a6dc7f/2e363ef5-df17-4572-b171-82f70aff52a0/rotations/south-east.png?t=1773059207763\")",
+      "Bash(curl --fail -o north-east.png \"https://backblaze.pixellab.ai/file/pixellab-characters/2b77341c-cd5e-41c2-bc19-3ce660a6dc7f/2e363ef5-df17-4572-b171-82f70aff52a0/rotations/north-east.png?t=1773059207763\")",
+      "Bash(curl --fail -o north-west.png \"https://backblaze.pixellab.ai/file/pixellab-characters/2b77341c-cd5e-41c2-bc19-3ce660a6dc7f/2e363ef5-df17-4572-b171-82f70aff52a0/rotations/north-west.png?t=1773059207763\")",
+      "Bash(curl --fail -o south-west.png \"https://backblaze.pixellab.ai/file/pixellab-characters/2b77341c-cd5e-41c2-bc19-3ce660a6dc7f/2e363ef5-df17-4572-b171-82f70aff52a0/rotations/south-west.png?t=1773059207763\")",
+      "Bash(ls -la *.png)",
+      "mcp__pixellab__get_character",
+      "mcp__pixellab__delete_character"
     ]
   }
 }

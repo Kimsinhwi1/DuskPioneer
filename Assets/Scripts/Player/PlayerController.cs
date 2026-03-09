@@ -3,7 +3,7 @@ using UnityEngine.InputSystem;
 
 /// <summary>
 /// 플레이어 이동 및 애니메이션을 관리하는 컨트롤러.
-/// Animator 없이 직접 스프라이트를 제어하여 확실한 방향 표시.
+/// 8방향 지원, Animator 없이 직접 스프라이트를 제어.
 /// </summary>
 public class PlayerController : MonoBehaviour
 {
@@ -13,26 +13,53 @@ public class PlayerController : MonoBehaviour
     /// <summary>true이면 이동/애니메이션 입력을 무시한다 (도구 사용 중 등).</summary>
     [HideInInspector] public bool isActionLocked;
 
-    /// <summary>현재 바라보는 방향 (0=Down, 1=Up, 2=Left, 3=Right). 읽기 전용.</summary>
+    /// <summary>현재 바라보는 방향 인덱스. 읽기 전용.</summary>
     public int Direction => _direction;
 
-    // 방향별 스프라이트 (Phase0Setup에서 할당)
-    [HideInInspector] public Sprite[] walkDownSprites;
-    [HideInInspector] public Sprite[] walkUpSprites;
-    [HideInInspector] public Sprite[] walkLeftSprites;
-    [HideInInspector] public Sprite[] walkRightSprites;
-    [HideInInspector] public Sprite idleDown;
-    [HideInInspector] public Sprite idleUp;
-    [HideInInspector] public Sprite idleLeft;
-    [HideInInspector] public Sprite idleRight;
+    // ── 8방향 순서: 0=S, 1=SW, 2=W, 3=NW, 4=N, 5=NE, 6=E, 7=SE ──
+    public const int DIR_S = 0;
+    public const int DIR_SW = 1;
+    public const int DIR_W = 2;
+    public const int DIR_NW = 3;
+    public const int DIR_N = 4;
+    public const int DIR_NE = 5;
+    public const int DIR_E = 6;
+    public const int DIR_SE = 7;
+    public const int DIR_COUNT = 8;
+
+    /// <summary>방향별 Idle 스프라이트 (8개, 에디터에서 할당).</summary>
+    [HideInInspector] public Sprite[] idleSprites = new Sprite[DIR_COUNT];
+
+    /// <summary>방향별 Walk 프레임 (8방향 × N프레임, 1차원 배열 — [dir*framesPerDir + frame]).</summary>
+    [HideInInspector] public Sprite[] walkSprites;
+
+    /// <summary>방향당 walk 프레임 수.</summary>
+    [HideInInspector] public int walkFramesPerDir = 6;
+
+    // ── 방향별 오프셋 벡터 (도구 사용 등에서 활용) ──
+    public static readonly Vector2[] DIR_OFFSETS =
+    {
+        new Vector2(0, -1),           // S
+        new Vector2(-0.7f, -0.7f),    // SW
+        new Vector2(-1, 0),           // W
+        new Vector2(-0.7f, 0.7f),     // NW
+        new Vector2(0, 1),            // N
+        new Vector2(0.7f, 0.7f),      // NE
+        new Vector2(1, 0),            // E
+        new Vector2(0.7f, -0.7f),     // SE
+    };
 
     private Rigidbody2D _rb;
     private SpriteRenderer _sr;
     private Vector2 _moveInput;
-    private int _direction; // 0=Down, 1=Up, 2=Left, 3=Right
+    private int _direction;
     private float _animTimer;
     private int _animFrame;
     private InputAction _moveAction;
+
+    // Atan2 각도 섹터 → 방향 인덱스 매핑
+    // 섹터: 0=East, 1=NE, 2=N, 3=NW, 4=W, 5=SW, 6=S, 7=SE
+    private static readonly int[] SECTOR_TO_DIR = { DIR_E, DIR_NE, DIR_N, DIR_NW, DIR_W, DIR_SW, DIR_S, DIR_SE };
 
     private void Awake()
     {
@@ -40,20 +67,6 @@ public class PlayerController : MonoBehaviour
         _rb.gravityScale = 0;
         _rb.freezeRotation = true;
         _sr = GetComponent<SpriteRenderer>();
-
-        // 스프라이트 할당 확인 로그
-        Debug.Log($"[PC] === Direct Sprite Mode (No Animator) ===");
-        Debug.Log($"[PC] walkDown: {LogSprites(walkDownSprites)}");
-        Debug.Log($"[PC] walkUp: {LogSprites(walkUpSprites)}");
-        Debug.Log($"[PC] walkLeft: {LogSprites(walkLeftSprites)}");
-        Debug.Log($"[PC] walkRight: {LogSprites(walkRightSprites)}");
-        Debug.Log($"[PC] idleDown:{idleDown?.name} idleUp:{idleUp?.name} idleLeft:{idleLeft?.name} idleRight:{idleRight?.name}");
-    }
-
-    private string LogSprites(Sprite[] arr)
-    {
-        if (arr == null || arr.Length == 0) return "NULL/EMPTY";
-        return string.Join(", ", System.Array.ConvertAll(arr, s => s != null ? s.name : "null"));
     }
 
     private void OnEnable()
@@ -81,7 +94,6 @@ public class PlayerController : MonoBehaviour
 
     private void Update()
     {
-        // 도구 사용 등 액션 잠금 중에는 이동/애니메이션 처리 안 함
         if (isActionLocked)
         {
             _moveInput = Vector2.zero;
@@ -91,13 +103,13 @@ public class PlayerController : MonoBehaviour
         _moveInput = _moveAction.ReadValue<Vector2>();
         bool isMoving = _moveInput.sqrMagnitude > 0.01f;
 
-        // 방향 결정
+        // 8방향 결정
         if (isMoving)
         {
-            if (Mathf.Abs(_moveInput.x) > Mathf.Abs(_moveInput.y))
-                _direction = _moveInput.x < 0 ? 2 : 3; // Left : Right
-            else
-                _direction = _moveInput.y > 0 ? 1 : 0; // Up : Down
+            float angle = Mathf.Atan2(_moveInput.y, _moveInput.x) * Mathf.Rad2Deg;
+            if (angle < 0) angle += 360f;
+            int sector = Mathf.FloorToInt((angle + 22.5f) / 45f) % 8;
+            _direction = SECTOR_TO_DIR[sector];
         }
 
         // 스프라이트 직접 설정
@@ -110,18 +122,12 @@ public class PlayerController : MonoBehaviour
                 _animFrame++;
             }
 
-            Sprite[] walkSprites = _direction switch
-            {
-                1 => walkUpSprites,
-                2 => walkLeftSprites,
-                3 => walkRightSprites,
-                _ => walkDownSprites
-            };
-
             if (walkSprites != null && walkSprites.Length > 0)
             {
-                _animFrame %= walkSprites.Length;
-                _sr.sprite = walkSprites[_animFrame];
+                _animFrame %= walkFramesPerDir;
+                int idx = _direction * walkFramesPerDir + _animFrame;
+                if (idx < walkSprites.Length)
+                    _sr.sprite = walkSprites[idx];
             }
         }
         else
@@ -129,13 +135,8 @@ public class PlayerController : MonoBehaviour
             _animTimer = 0;
             _animFrame = 0;
 
-            _sr.sprite = _direction switch
-            {
-                1 => idleUp,
-                2 => idleLeft,
-                3 => idleRight,
-                _ => idleDown
-            };
+            if (idleSprites != null && _direction < idleSprites.Length && idleSprites[_direction] != null)
+                _sr.sprite = idleSprites[_direction];
         }
     }
 

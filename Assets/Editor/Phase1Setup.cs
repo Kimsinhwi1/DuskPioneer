@@ -595,23 +595,8 @@ public static class Phase1Setup
             toolsProp.GetArrayElementAtIndex(i).objectReferenceValue = toolAssets[i];
         }
 
-        // Attack.png 스프라이트 할당
-        // Attack.png = 64x16 = 4x1 그리드 → 방향별 1프레임: [Down, Up, Left, Right]
-        var attackSprites = LoadSpritesOrdered(PRINCESS_PATH + "/SeparateAnim/Attack.png");
-        if (attackSprites.Length >= 4)
-        {
-            // 4x1: sprites[0]=Down, [1]=Up, [2]=Left, [3]=Right
-            SetSpriteArray(so, "attackDownSprites",  new Sprite[] { attackSprites[0] });
-            SetSpriteArray(so, "attackUpSprites",    new Sprite[] { attackSprites[1] });
-            SetSpriteArray(so, "attackLeftSprites",  new Sprite[] { attackSprites[2] });
-            SetSpriteArray(so, "attackRightSprites", new Sprite[] { attackSprites[3] });
-
-            Debug.Log($"[Phase1 Step2] Attack 스프라이트 {attackSprites.Length}개 로드, 방향별 1프레임 할당.");
-        }
-        else
-        {
-            Debug.LogWarning($"[Phase1 Step2] Attack.png 스프라이트 부족: {attackSprites.Length}개 (4개 필요). Phase 0 Setup을 먼저 실행하세요.");
-        }
+        // Attack 스프라이트: ToolController에서 더 이상 사용하지 않음 (8방향 전환 후 제거됨)
+        Debug.Log("[Phase1 Step2] Attack 스프라이트 할당 건너뜀 (8방향 캐릭터에서는 CharacterSwapSetup 사용).");
 
         so.ApplyModifiedPropertiesWithoutUndo();
     }

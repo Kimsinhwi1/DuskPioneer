@@ -5,6 +5,7 @@ using UnityEngine.InputSystem;
 /// <summary>
 /// 도구 선택 및 사용을 담당하는 컨트롤러.
 /// Player 오브젝트에 PlayerController와 함께 부착.
+/// 8방향 지원.
 /// </summary>
 public class ToolController : MonoBehaviour
 {
@@ -12,14 +13,8 @@ public class ToolController : MonoBehaviour
     [Tooltip("순서대로 1~4키에 매핑")]
     public SO_ToolData[] tools = new SO_ToolData[4];
 
-    [Header("도구 사용 스프라이트 (Attack.png, 열 기반)")]
-    [HideInInspector] public Sprite[] attackDownSprites;
-    [HideInInspector] public Sprite[] attackUpSprites;
-    [HideInInspector] public Sprite[] attackLeftSprites;
-    [HideInInspector] public Sprite[] attackRightSprites;
-
     // ── 상수 ──
-    private const float TOOL_USE_DURATION = 0.3f;  // 도구 사용 지속 시간 (초)
+    private const float TOOL_USE_DURATION = 0.3f;
 
     // ── 현재 상태 ──
     private int _selectedIndex;
@@ -55,7 +50,6 @@ public class ToolController : MonoBehaviour
 
     private void OnEnable()
     {
-        // 도구 선택: 1~4 숫자키
         _toolSelectAction = new InputAction("ToolSelect", InputActionType.Button);
         _toolSelectAction.AddBinding("<Keyboard>/1");
         _toolSelectAction.AddBinding("<Keyboard>/2");
@@ -64,7 +58,6 @@ public class ToolController : MonoBehaviour
         _toolSelectAction.performed += OnToolSelectPerformed;
         _toolSelectAction.Enable();
 
-        // 도구 사용: Space
         _toolUseAction = new InputAction("ToolUse", InputActionType.Button);
         _toolUseAction.AddBinding("<Keyboard>/space");
         _toolUseAction.performed += OnToolUsePerformed;
@@ -84,7 +77,6 @@ public class ToolController : MonoBehaviour
 
     private void Start()
     {
-        // 초기 도구 선택 이벤트 발행
         if (tools.Length > 0 && tools[0] != null)
             OnToolChanged?.Invoke(tools[0]);
     }
@@ -93,35 +85,11 @@ public class ToolController : MonoBehaviour
     {
         if (!_isUsingTool) return;
 
-        // 도구 사용 지속 시간
         _animTimer += Time.deltaTime;
 
         if (_animTimer >= TOOL_USE_DURATION)
         {
-            // 도구 사용 완료
             FinishToolUse();
-            return;
-        }
-
-        // 현재 방향에 맞는 공격 스프라이트 표시
-        Sprite[] sprites = _pc.Direction switch
-        {
-            1 => attackUpSprites,
-            2 => attackLeftSprites,
-            3 => attackRightSprites,
-            _ => attackDownSprites
-        };
-
-        if (sprites != null && sprites.Length > 0)
-        {
-            // 프레임이 여러 개면 시간 기반 인덱스, 1개면 그대로 표시
-            int frame = 0;
-            if (sprites.Length > 1)
-            {
-                float frameTime = TOOL_USE_DURATION / sprites.Length;
-                frame = Mathf.Min((int)(_animTimer / frameTime), sprites.Length - 1);
-            }
-            _sr.sprite = sprites[frame];
         }
     }
 
@@ -133,7 +101,6 @@ public class ToolController : MonoBehaviour
     {
         if (_isUsingTool) return;
 
-        // 어떤 키가 눌렸는지 확인
         string key = ctx.control.name;
         int index = key switch
         {
@@ -156,7 +123,6 @@ public class ToolController : MonoBehaviour
         if (_isUsingTool) return;
         if (CurrentTool == null) return;
 
-        // 스태미나 체크
         if (_stamina != null && !_stamina.UseStamina(CurrentTool.staminaCost))
         {
             Debug.Log("[Tool] 스태미나 부족!");
@@ -174,8 +140,6 @@ public class ToolController : MonoBehaviour
     {
         _isUsingTool = true;
         _animTimer = 0f;
-
-        // 이동 차단
         _pc.isActionLocked = true;
     }
 
@@ -184,25 +148,17 @@ public class ToolController : MonoBehaviour
         _isUsingTool = false;
         _pc.isActionLocked = false;
 
-        // 도구 사용 완료 이벤트 (Step 3에서 FarmTile이 구독)
-        // 사용 위치: 플레이어 앞 1타일
         Vector2 usePos = GetToolTargetPosition();
         OnToolUsed?.Invoke(CurrentTool.toolType, usePos);
     }
 
     /// <summary>
-    /// 플레이어가 바라보는 방향의 1타일 앞 위치를 반환한다.
+    /// 플레이어가 바라보는 방향의 1타일 앞 위치를 반환한다 (8방향 지원).
     /// </summary>
     private Vector2 GetToolTargetPosition()
     {
         Vector2 pos = transform.position;
-        Vector2 offset = _pc.Direction switch
-        {
-            1 => Vector2.up,
-            2 => Vector2.left,
-            3 => Vector2.right,
-            _ => Vector2.down
-        };
+        Vector2 offset = PlayerController.DIR_OFFSETS[_pc.Direction];
         return pos + offset;
     }
 }

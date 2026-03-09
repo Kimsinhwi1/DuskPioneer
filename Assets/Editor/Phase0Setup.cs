@@ -340,26 +340,41 @@ public static class Phase0Setup
         col.size = new Vector2(0.8f, 0.5f);
         col.offset = new Vector2(0, -0.25f);
 
-        // PlayerController — 스프라이트 직접 할당
+        // PlayerController — 스프라이트는 CharacterSwapSetup에서 할당
         var pc = player.AddComponent<PlayerController>();
 
-        // Walk.png 열 기반 레이아웃: Col0=Down, Col1=Up, Col2=Left, Col3=Right
-        // 각 행은 프레임 번호 (f0~f3), 같은 방향은 같은 열에서 추출
-        if (walkSprites.Length >= 16)
-        {
-            pc.walkDownSprites  = new[] { walkSprites[0], walkSprites[4], walkSprites[8],  walkSprites[12] };
-            pc.walkUpSprites    = new[] { walkSprites[1], walkSprites[5], walkSprites[9],  walkSprites[13] };
-            pc.walkLeftSprites  = new[] { walkSprites[2], walkSprites[6], walkSprites[10], walkSprites[14] };
-            pc.walkRightSprites = new[] { walkSprites[3], walkSprites[7], walkSprites[11], walkSprites[15] };
-        }
-
-        // Idle.png 배치: Down, Up, Left, Right (유저 확인)
+        // 기본 Idle: Ninja Adventure 4방향 → 8방향 중 S/W/N/E만 할당 (임시)
         if (idleSprites.Length >= 4)
         {
-            pc.idleDown  = idleSprites[0];
-            pc.idleUp    = idleSprites[1];
-            pc.idleLeft  = idleSprites[2];
-            pc.idleRight = idleSprites[3];
+            pc.idleSprites = new Sprite[PlayerController.DIR_COUNT];
+            pc.idleSprites[PlayerController.DIR_S]  = idleSprites[0]; // Down
+            pc.idleSprites[PlayerController.DIR_N]  = idleSprites[1]; // Up
+            pc.idleSprites[PlayerController.DIR_W]  = idleSprites[2]; // Left
+            pc.idleSprites[PlayerController.DIR_E]  = idleSprites[3]; // Right
+            // 대각선은 가까운 방향 복사
+            pc.idleSprites[PlayerController.DIR_SW] = idleSprites[2];
+            pc.idleSprites[PlayerController.DIR_NW] = idleSprites[2];
+            pc.idleSprites[PlayerController.DIR_NE] = idleSprites[3];
+            pc.idleSprites[PlayerController.DIR_SE] = idleSprites[3];
+        }
+
+        // Walk: 4방향 4프레임 → 8방향 배열로 변환 (대각선은 가까운 방향 복사)
+        if (walkSprites.Length >= 16)
+        {
+            Sprite[] down  = { walkSprites[0], walkSprites[4], walkSprites[8],  walkSprites[12] };
+            Sprite[] up    = { walkSprites[1], walkSprites[5], walkSprites[9],  walkSprites[13] };
+            Sprite[] left  = { walkSprites[2], walkSprites[6], walkSprites[10], walkSprites[14] };
+            Sprite[] right = { walkSprites[3], walkSprites[7], walkSprites[11], walkSprites[15] };
+            pc.walkFramesPerDir = 4;
+            pc.walkSprites = new Sprite[PlayerController.DIR_COUNT * 4];
+            System.Array.Copy(down,  0, pc.walkSprites, PlayerController.DIR_S  * 4, 4);
+            System.Array.Copy(left,  0, pc.walkSprites, PlayerController.DIR_SW * 4, 4);
+            System.Array.Copy(left,  0, pc.walkSprites, PlayerController.DIR_W  * 4, 4);
+            System.Array.Copy(left,  0, pc.walkSprites, PlayerController.DIR_NW * 4, 4);
+            System.Array.Copy(up,    0, pc.walkSprites, PlayerController.DIR_N  * 4, 4);
+            System.Array.Copy(right, 0, pc.walkSprites, PlayerController.DIR_NE * 4, 4);
+            System.Array.Copy(right, 0, pc.walkSprites, PlayerController.DIR_E  * 4, 4);
+            System.Array.Copy(right, 0, pc.walkSprites, PlayerController.DIR_SE * 4, 4);
         }
 
         return player;
